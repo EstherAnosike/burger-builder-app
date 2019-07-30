@@ -3,8 +3,10 @@ import React, { Component } from 'react';
 import Aux from './../../hoc/aux/Aux';
 import Burger from './../../components/burger/Burger';
 import Modal from './../../components/UI/modal/Modal';
+import Spinner from './../../components/UI/spinner/Spinner';
 import OrderSummary from './../../components/burger/orderSummary/OrderSummary';
 import BuildControls from './../../components/burger/buildControls/BuildControls';
+import axios from './../../AxiosOrders';
 
 const INGREDIENT_PRICES = {
     salad: 0.5,
@@ -16,10 +18,20 @@ const INGREDIENT_PRICES = {
 class BurgerBuilder extends Component {  
 
     state = { 
-        ingredients:{salad:0, bacon:0, cheese:0, meat:0},
+        ingredients:null,
         totalPrice: 4,
         purchasable: false,
+        loading: false,
      }
+
+    componentDidMount() {
+        axios.get('https://react-my-burger-a07fe.firebaseio.com/ingredients.json')
+            .then(response => {
+                this.setState({
+                    ingredients:response.data
+                });
+            });
+    }
 
     updatePurchaseOrder = (ingredients)=> {
         const sum = Object.keys(ingredients).map(igKey => {
@@ -84,7 +96,16 @@ class BurgerBuilder extends Component {
     }
 
     purchaseContinueHandler = () => {
-        alert('You continued!')
+        const queryParams = [];
+        for (let i in this.state.ingredients) {
+            queryParams.push(encodeURIComponent(i) + '=' + encodeURIComponent(this.state.ingredients[i]));
+        }
+        queryParams.push('price=' + this.state.totalPrice);
+        const queryString = queryParams.join('&'); 
+        this.props.history.push({
+            pathname: '/checkout',
+            search: '?'+ queryString 
+        });
     }
 
     render() { 
@@ -92,26 +113,43 @@ class BurgerBuilder extends Component {
             ...this.state.ingredients
         };
         for (let key in disabledInfo) {
-            disabledInfo[key] = disabledInfo[key] <=0
+            disabledInfo[key] = disabledInfo[key] <= 0
         }
+
+        let orderSummary = null;
+        let burger = <Spinner />
+
+        if (this.state.ingredients) {
+            burger = (
+                <Aux>
+                    <Burger ingredients={this.state.ingredients} />
+                    <BuildControls 
+                        ingredientAdded={this.addIngredientHandler}
+                        ingredientRemoved={this.removeIngredientHandler}
+                        disabled={disabledInfo}
+                        price={this.state.totalPrice}
+                        purchasable={this.state.purchasable}
+                        ordered={this.purchaseHandler}
+                    />
+                </Aux>
+            );
+            orderSummary= <OrderSummary
+            price={this.state.totalPrice}
+            ingredients={this.state.ingredients}
+            purchaseCancelled={this.purchaseCancelHandler}
+            purchaseContinued={this.purchaseContinueHandler} />
+        }
+
+        if(this.state.loading) {
+            orderSummary = <Spinner />;
+        }
+
         return ( 
             <Aux>
                 <Modal show={this.state.purchasing} modalClosed={this.purchaseCancelHandler}>
-                    <OrderSummary 
-                        price={this.state.totalPrice}
-                        ingredients={this.state.ingredients}
-                        purchaseCancelled={this.purchaseCancelHandler}
-                        purchaseContinued={this.purchaseContinueHandler} />
+                    {orderSummary}
                 </Modal>
-                <Burger ingredients={this.state.ingredients} />
-                <BuildControls 
-                    ingredientAdded={this.addIngredientHandler}
-                    ingredientRemoved={this.removeIngredientHandler}
-                    disabled={disabledInfo}
-                    price={this.state.totalPrice}
-                    purchasable={this.state.purchasable}
-                    ordered={this.purchaseHandler}
-                />
+                {burger}
             </Aux>
          );
     }
